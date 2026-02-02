@@ -1,0 +1,35 @@
+verbose: false
+
+model:
+  tfidf:
+    architectures:
+      - logistic
+      - svm
+    split:
+      train_size: 0.9
+      val_size: 0.1
+
+  neural:
+    architectures:
+      - lstm
+      - cnn
+    split:
+      train_size: 0.9
+      val_size: 0.1
+
+  transformer:
+    architectures:
+      - brian
+
+dataset:
+  train:
+    path: ./dataset/train.jsonl
+  test:
+    path: ./dataset/test.jsonl
+
+training:
+  lr: 0.001
+  batch_size: 4
+  epochs: 80
+  patience: 10
+  classes: 4
