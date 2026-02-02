@@ -24,57 +24,63 @@ def build_parser(config) -> argparse.ArgumentParser:
             help=f"Architecture for {model_name}"
         )
 
-        # Dataset only change for final 
+        # dataset only change for final 
         sp.add_argument(
             "--path",
             default=config["dataset"]["train"]["path"],
             help="Dataset path (default: train)"
         )
 
-        # Training hyperparameters 
+        # training hyperparameters 
         sp.add_argument("--lr", 
                         type=float, \
                         default=config["training"]["lr"], 
                         help="Learning rate (default: 0.001)")
+        
         sp.add_argument("--batch_size", 
                         type=int, 
                         default=config["training"]["batch_size"], 
                         help="Batch size (default: 4)")
+        
         sp.add_argument("--epochs", 
                         type=int, 
                         default=config["training"]["epochs"], 
                         help="Number of epochs (default: 80)")
+        
         sp.add_argument("--patience", 
                         type=int, 
                         default=config["training"]["patience"], 
                         help="Early stopping patience (default: 10)")
 
-    parser.add_argument(
-        "--verbose",
-        required=False,
-        help="prints all model details (default: False)",
-    )
+        # model details  
+        sp.add_argument("--verbose", 
+                        choices=config["verbosity"]["level"],
+                        type=str,
+                        default="low",
+                        help="prints all model details (default: low)",)
+        
     return parser
 
-def details_model(config) -> None:
+def details_model(args) -> None:
     """
     Prints details about the models and their architectures.
     """
-    if config["verbose"]: 
-        print(f"Model: {args.model}")
-        print(f"Architecture: {args.arc}")
+    print(f"Model: {args.model}")
+    print(f"Architecture: {args.arc}")
+
+    if args.verbose == "high":
         print(f"Dataset path: {args.path}")
         print(f"Learning rate: {args.lr}")
         print(f"Batch size: {args.batch_size}")
         print(f"Epochs: {args.epochs}")
         print(f"Patience: {args.patience}")
+    elif args.verbose == "medium":
+        print(f"Learning rate: {args.lr}")
     else:
-        print(f"Model: {args.model}")
-        print(f"Architecture: {args.arc}")
-
+        pass 
 
 if __name__ == "__main__":
     config = load_config("config.yaml")
     parser = build_parser(config)
     args = parser.parse_args()
-    details_model(config)
+    details_model(args)

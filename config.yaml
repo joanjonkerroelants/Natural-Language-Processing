@@ -1,4 +1,8 @@
-verbose: false
+verbosity:
+  level:
+    high: 
+    medium: 
+    low:
 
 model:
   tfidf:
