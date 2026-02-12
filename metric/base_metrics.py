@@ -1,6 +1,11 @@
 from typing import cast
 
-from sklearn.metrics import classification_report, confusion_matrix
+import matplotlib.pyplot as plt
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    classification_report,
+    confusion_matrix,
+)
 
 
 def get_metrics(model, X_test, y_test, labels):
@@ -11,7 +16,12 @@ def get_metrics(model, X_test, y_test, labels):
 
     macro_f1 = report["macro avg"]["f1-score"]
     accuracy = report["accuracy"]
-    conf_m = confusion_matrix(y_test, y_pred, labels=labels)
+    conf_m = confusion_matrix(y_test, y_pred)
+    disp = ConfusionMatrixDisplay(
+        confusion_matrix=conf_m, display_labels=labels
+    )
+    disp.plot(xticks_rotation="vertical")
+    plt.show()
 
     return {
         "accuracy": accuracy,
