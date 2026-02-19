@@ -1,24 +1,30 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
-from sklearn.model_selection import train_test_split
+from pathlib import Path
+
 import pandas as pd
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader 
-import torch.nn.functional as F
 import torch
+import torch.nn.functional as F
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, Dataset
 
 TRAIN_PATH = "./dataset/train.jsonl"
 TEST_PATH = "./dataset/test.jsonl"
 
+
 class loading:
     """Simple dataset loader for train/test JSONL files."""
 
-    def __init__(self,dataset: str = TRAIN_PATH,seed: int = 42,ratio: float = 0.9,test_path: str = TEST_PATH) -> None:
+    def __init__(
+        self,
+        dataset: str = TRAIN_PATH,
+        seed: int = 42,
+        ratio: float = 0.9,
+        test_path: str = TEST_PATH,
+    ) -> None:
         self.data = Path(dataset)
         self.test_data = Path(test_path)
         self.seed = seed
@@ -34,38 +40,62 @@ class loading:
         df = self._load(self.data)
         test_df = self._load(self.test_data)
 
-        train_df, dev_df = train_test_split(df, test_size= 1 - self.ratio, random_state=self.seed)
+        train_df, dev_df = train_test_split(
+            df, test_size=1 - self.ratio, random_state=self.seed
+        )
 
-        return (DatasetNews(train_df), DatasetNews(dev_df), DatasetNews(test_df, has_label=False))
+        return (
+            DatasetNews(train_df),
+            DatasetNews(dev_df),
+            DatasetNews(test_df, has_label=False),
+        )
+
 
 class Preprocessing:
     """Preprocessing class for text data."""
+
     _stop_words: set[str] | None = None
 
-    def __init__(self, text, stop_words: set[str] = stopwords.words("english")) -> None:
+    def __init__(self, text, stop_words: set[str] | None = None) -> None:
         self.text = text
-        self._stop_words = stop_words
+        if stop_words is None:
+            try:
+                stop_words = set(stopwords.words("english"))
+            except LookupError:
+                import nltk
 
-    def preprocess(self): # normilize text by lowercasing, removing punctuation, and extra whitespace
+                nltk.download("stopwords", quiet=True)
+                stop_words = set(stopwords.words("english"))
+            self._stop_words = stop_words
+
+    def preprocess(
+        self,
+    ):  # normilize text by lowercasing, removing punctuation, and extra whitespace
         sentence = self.text.lower().strip()
         sentence = re.sub(r"[^a-z0-9\s]", " ", sentence)
         sentence = " ".join(sentence.split())
         return sentence
 
-    def tokenize(self): # tokenize the text and remove stop words using nltk
+    def tokenize(self):  # tokenize the text and remove stop words using nltk
         tokens = word_tokenize(self.preprocess())
         tokens = [word for word in tokens if word not in self._stop_words]
         return ["<s>"] + tokens + ["</s>"]
 
+
 class DatasetNews(Dataset):
     """Torch dataset that returns tokenized text and label."""
 
-    def __init__(self, df: pd.DataFrame, text_mode: str = "full") -> None:
+    def __init__(
+        self, df: pd.DataFrame, text_mode: str = "full", has_label: bool = True
+    ) -> None:
         self.df = df.reset_index(drop=True)
         self.text_mode = text_mode
+        self.has_label = has_label
 
         if self.text_mode not in {"full", "title", "description"}:
-            raise ValueError(f"Invalid text_mode: {self.text_mode}. Must be 'full', 'title', or 'description'.")
+            raise ValueError(
+                f"Invalid text_mode: {self.text_mode}. Must be 'full', 'title', or 'description'."
+            )
 
     def __len__(self) -> int:
         return len(self.df)
@@ -82,7 +112,10 @@ class DatasetNews(Dataset):
             text = description
 
         tokens = Preprocessing(text).tokenize()
-        
-        label = row["label"]
-        label = F.one_hot(torch.tensor(label - 1), num_classes=4)
-        return {"tokens": tokens, "label": label}
+
+        if self.has_label:
+            label = row["label"]
+            label = F.one_hot(torch.tensor(label - 1), num_classes=4)
+            return {"tokens": tokens, "label": label}
+        else:
+            return {"tokens": tokens}
