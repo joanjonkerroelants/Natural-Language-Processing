@@ -115,7 +115,7 @@ class DatasetNews(Dataset):
 
         if self.has_label:
             label = row["label"]
-            label = F.one_hot(torch.tensor(label - 1), num_classes=4)
+            label = torch.tensor(label - 1)
             return {"tokens": tokens, "label": label}
         else:
             return {"tokens": tokens}
