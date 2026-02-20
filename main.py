@@ -11,8 +11,10 @@ from sklearn.metrics import (
     f1_score,
 )
 
+from models import tfidf
 from models.load import loading
-from models.tfidf import LR_TFIDF, SVM_TFIDF
+
+LABELS = {1: "World", 2: "Sports", 3: "Business", 4: "Sci/Tech"}
 
 
 def load_config(config_path) -> dict:
@@ -23,7 +25,9 @@ def load_config(config_path) -> dict:
 
 def build_parser(config) -> argparse.ArgumentParser:
     "builds the parser based on config"
-    parser = argparse.ArgumentParser(description="Pipeline for multiple models")
+    parser = argparse.ArgumentParser(
+        description="Pipeline for multiple models"
+    )
 
     subparsers = parser.add_subparsers(dest="model", required=True)
 
@@ -32,7 +36,7 @@ def build_parser(config) -> argparse.ArgumentParser:
 
         # Architecture choices
         sp.add_argument(
-            "arc",
+            "architecture",
             choices=model_cfg["architectures"],
             help=f"Architecture for {model_name}",
         )
@@ -90,7 +94,7 @@ def details_model(args) -> None:
     Prints details about the models and their architectures.
     """
     print(f"Model: {args.model}")
-    print(f"Architecture: {args.arc}")
+    print(f"Architecture: {args.architecture}")
 
     if args.verbose == "high":
         print(f"Dataset path: {args.path}")
@@ -119,22 +123,6 @@ def load_data(config) -> tuple:
     return train_dataset, dev_dataset, test_dataset
 
 
-def train_model(model_type: str, X_train, y_train):
-    """
-    Train a TF-IDF model with Logistic Regression or SVM.
-    """
-    if model_type == "logistic":
-        model = LR_TFIDF()
-    elif model_type == "svm":
-        model = SVM_TFIDF()
-    else:
-        raise ValueError(f"Unknown model type: {model_type}")
-
-    model.fit(X_train, y_train)
-
-    return model
-
-
 def evaluate_model(model, X_test, y_test, dataset_name: str = "Test"):
     """
     Evaluate model and return metrics.
@@ -155,15 +143,27 @@ def evaluate_model(model, X_test, y_test, dataset_name: str = "Test"):
     plt.show()
 
 
-def error_analysis(test_df, y_test, model):
+def error_analysis(test_df, y_test, X_test, model):
+    """Perform error analysis by displaying misclassified examples.
+
+    Converts numeric labels back to readable text using `LABELS` and
+    compares true vs predicted labels.
     """
-    Perform error analysis by displaying misclassified examples.
-    """
+
+    true_labels_text = [
+        LABELS.get(int(i) + 1, str(int(i) + 1)) for i in y_test
+    ]
+
+    pred_numeric = model.predict(X_test)
+    pred_labels_text = [
+        LABELS.get(int(i) + 1, str(int(i) + 1)) for i in pred_numeric
+    ]
+
     df_predictions = pd.DataFrame(
         {
             "text": test_df["description"].values,
-            "true_label": [i for i in y_test],
-            "pred_label": [i for i in model.predict(X_test)],
+            "true_label": true_labels_text,
+            "pred_label": pred_labels_text,
         }
     )
 
@@ -171,10 +171,10 @@ def error_analysis(test_df, y_test, model):
         df_predictions["true_label"] != df_predictions["pred_label"]
     ]
 
-    print(f"Total Errors: {len(errors)}")
-    print("Displaying first 20 misclassifications:")
-
-    print(errors.head(20))
+    for e in errors.head(20).itertuples():
+        print(f"Text: {e.text}")
+        print(f"True Label: {e.true_label}, Predicted Label: {e.pred_label}")
+        print("\n" + "-" * 50 + "\n")
 
 
 if __name__ == "__main__":
@@ -186,29 +186,29 @@ if __name__ == "__main__":
     print("Loading data...")
     train_dataset, dev_dataset, test_dataset = load_data(config)
 
-    vectorizer = TfidfVectorizer(max_features=5000, stop_words="english")
-
     train_df = train_dataset.df
     dev_df = dev_dataset.df
     test_df = test_dataset.df
 
-    X_train = vectorizer.fit_transform(train_df["description"])
-    X_dev = vectorizer.transform(dev_df["description"])
-    X_test = vectorizer.transform(test_df["description"])
-
-    y_train = train_df["label"].values - 1
-    y_dev = dev_df["label"].values - 1
-    y_test = test_df["label"].values - 1
-
     if args.model == "tfidf":
         print("Training TF-IDF model...")
-        model = train_model(args.arc, X_train, y_train)
+        vectorizer = TfidfVectorizer(max_features=5000, stop_words="english")
+
+        X_train = vectorizer.fit_transform(train_df["description"])
+        X_dev = vectorizer.transform(dev_df["description"])
+        X_test = vectorizer.transform(test_df["description"])
+
+        y_train = train_df["label"].values - 1
+        y_dev = dev_df["label"].values - 1
+        y_test = test_df["label"].values - 1
+
+        model = tfidf.train_model(args.architecture, X_train, y_train)
+
+        print("Performing error analysis on Test set:")
+        error_analysis(test_df, y_test, X_test, model)
 
         print("Evaluating Dev:")
         dev_results = evaluate_model(model, X_dev, y_dev, "Dev")
 
         print("Evaluating Test:")
         test_results = evaluate_model(model, X_test, y_test, "Test")
-
-        print("Performing error analysis on Test set:")
-        error_analysis(test_df, y_test, model)

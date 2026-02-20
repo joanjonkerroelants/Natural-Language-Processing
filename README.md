@@ -1,10 +1,26 @@
 # Natural-Language-Processing
-assigment 1, 2 and 3 for NLP 
+Assigment 1, 2 and 3 for NLP 
 
-it can and should all be done via the terminal 
+## Reproducing the results from assignment 1:
 
-1: ```git clone https://github.com/joanjonkerroelants/Natural-Language-Processing/```
+Using *uv*:
 
-2: ```uv run main.py {model} {type} {chancing the parameters}```
+1. Logistic regression:
 
-Run ```uv run main.py -h``` to see all the hyperparameters and what they do.
+    ```uv run main.py tfidf logistic```
+
+2. Linear SVM:
+
+    ```uv run main.py tfidf svm```
+
+Using *pip*:
+
+```pip install -r requirements.txt```
+
+1. Logistic regression:
+
+    ```python main.py tfidf logistic```
+
+2. Linear SVM:
+
+    ```python main.py tfidf svm```

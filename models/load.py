@@ -5,11 +5,10 @@ from pathlib import Path
 
 import pandas as pd
 import torch
-import torch.nn.functional as F
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 
 TRAIN_PATH = "./dataset/train.jsonl"
 TEST_PATH = "./dataset/test.jsonl"
@@ -78,7 +77,11 @@ class Preprocessing:
 
     def tokenize(self):  # tokenize the text and remove stop words using nltk
         tokens = word_tokenize(self.preprocess())
-        tokens = [word for word in tokens if word not in self._stop_words]
+        tokens = [
+            word
+            for word in tokens
+            if not self._stop_words or word not in self._stop_words
+        ]
         return ["<s>"] + tokens + ["</s>"]
 
 
@@ -100,7 +103,7 @@ class DatasetNews(Dataset):
     def __len__(self) -> int:
         return len(self.df)
 
-    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor | list[str]]:
         row = self.df.iloc[idx]
         title = row["title"]
         description = row["description"]
