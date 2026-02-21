@@ -1,6 +1,9 @@
 # Natural-Language-Processing
 Assigment 1, 2 and 3 for NLP 
 
+To get the repo open your terminal and type in: 
+    ``` git clone {url} ```
+
 ## Reproducing the results from assignment 1:
 
 Using *uv*:
