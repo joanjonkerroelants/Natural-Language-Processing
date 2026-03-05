@@ -212,3 +212,9 @@ if __name__ == "__main__":
 
         print("Evaluating Test:")
         test_results = evaluate_model(model, X_test, y_test, "Test")
+    elif args.model == "neural":
+        if args.architecture == "lstm":
+            print("Training LSTM model...")
+        elif args.architecture == "cnn":
+            print("Training CNN model...")
+            model = cnn.CNNTextClassifier(vocab_size)
