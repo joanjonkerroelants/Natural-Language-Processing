@@ -11,7 +11,7 @@ from sklearn.metrics import (
     f1_score,
 )
 
-from models import tfidf
+from models import tfidf, cnn
 from models.load import loading
 
 LABELS = {1: "World", 2: "Sports", 3: "Business", 4: "Sci/Tech"}
@@ -212,3 +212,9 @@ if __name__ == "__main__":
 
         print("Evaluating Test:")
         test_results = evaluate_model(model, X_test, y_test, "Test")
+    elif args.model == "neural":
+        if args.architecture == "lstm":
+            print("Training LSTM model...")
+        elif args.architecture == "cnn":
+            print("Training CNN model...")
+            model = cnn.CNNTextClassifier(vocab_size)
