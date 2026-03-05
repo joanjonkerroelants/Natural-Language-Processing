@@ -69,15 +69,17 @@ def length_of_sentences(sentences: list, class_label=None):
         "interval_length": interval_length,
     }, array
 
-def vocab_from_sentences(sentences: list) -> set:
+def vocab_from_sentences(sentences: list) -> tuple[set, int]:
     """Calculate the vocabulary from a list of sentences."""
     vocab = set()
+    vocab_size = 0
     for sentence in sentences:
         sentence = re.sub(r"[^a-z0-9\s]", " ", sentence)
         words = sentence.split()
         if words not in vocab:
             vocab.update(words)
-    return vocab
+            vocab_size += 1
+    return vocab, vocab_size
 
 def most_common_words(sentences: list, n=15):
     """Calculate the most common words in a list of sentences."""
