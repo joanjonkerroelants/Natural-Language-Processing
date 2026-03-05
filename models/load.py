@@ -80,7 +80,6 @@ class Preprocessing:
             tokens = word_tokenize(self.preprocess())
         except LookupError:
             import nltk
-            nltk.download("punkt", quiet=True)
             nltk.download("punkt_tab", quiet=True)
             tokens = word_tokenize(self.preprocess())
         tokens = [

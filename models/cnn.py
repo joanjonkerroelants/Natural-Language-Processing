@@ -41,7 +41,7 @@ class LSTMTextClassifier(nn.Module):
         self,
         vocab_size: int,
         embed_dim: int = 64,
-        hidden_dim: int = 128,
+        hidden_dim: int = 64,
         num_layers: int = 2,
         dropout: float = 0.3,
         pad_idx: int = 0,
@@ -49,12 +49,24 @@ class LSTMTextClassifier(nn.Module):
     ) -> None:
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim, padding_idx=pad_idx)
+        self.hidden_dim = hidden_dim
         self.lstm = nn.LSTM(
             embed_dim, hidden_dim, num_layers=num_layers, batch_first=True, dropout=dropout
+        )
+        self.sequence = nn.Sequential(
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
         )
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(hidden_dim, num_classes)
 
     def forward(self, sentence: torch.Tensor) -> torch.Tensor:
         emb = self.embedding(sentence)
+        lstm_out, _ = self.lstm(emb)
+        pool_max = torch.max(lstm_out, dim=1).values
+        pool_mean = torch.mean(lstm_out, dim=1)
+        concentrated = torch.cat((pool_max, pool_mean), dim=1)
+        rep = self.sequence(concentrated)
+        rep = self.dropout(rep)
         return self.fc(rep)
