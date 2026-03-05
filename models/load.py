@@ -76,7 +76,13 @@ class Preprocessing:
         return sentence
 
     def tokenize(self):  # tokenize the text and remove stop words using nltk
-        tokens = word_tokenize(self.preprocess())
+        try:
+            tokens = word_tokenize(self.preprocess())
+        except LookupError:
+            import nltk
+            nltk.download("punkt", quiet=True)
+            nltk.download("punkt_tab", quiet=True)
+            tokens = word_tokenize(self.preprocess())
         tokens = [
             word
             for word in tokens
@@ -107,6 +113,7 @@ class DatasetNews(Dataset):
         row = self.df.iloc[idx]
         title = row["title"]
         description = row["description"]
+        
         if self.text_mode == "full":
             text = title + " " + description
         elif self.text_mode == "title":
