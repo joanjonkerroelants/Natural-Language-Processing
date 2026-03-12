@@ -1,7 +1,11 @@
 import argparse
+import copy
+from collections import Counter
+from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import torch
 import yaml
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import (
@@ -10,11 +14,46 @@ from sklearn.metrics import (
     confusion_matrix,
     f1_score,
 )
+from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 from models import cnn, tfidf
-from models.load import loading
+from models.load import Preprocessing, loading
 
 LABELS = {1: "World", 2: "Sports", 3: "Business", 4: "Sci/Tech"}
+
+PAD = "<pad>"
+UNK = "<unk>"
+PAD_IDX = 0
+UNK_IDX = 1
+
+
+@dataclass
+class Batch:
+    x: torch.Tensor  # (B, T) token ids
+    lengths: torch.Tensor  # (B,) true lengths
+    y: torch.Tensor  # (B,) labels
+
+
+def tokenize(text: str) -> list[str]:
+    return Preprocessing(text).tokenize()
+
+
+class NeuralDataset(Dataset):
+    """Wraps a DatasetNews split and converts token strings to vocab indices."""
+
+    def __init__(self, dataset, vocab: dict[str, int]) -> None:
+        self.dataset = dataset
+        self.vocab = vocab
+        self.unk_idx = vocab[UNK]
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getitem__(self, idx: int):
+        item = self.dataset[idx]
+        ids = [self.vocab.get(t, self.unk_idx) for t in item["tokens"]]
+        return ids, item["label"]
 
 
 def load_config(config_path) -> dict:
@@ -116,11 +155,119 @@ def load_data(config) -> tuple:
     loader = loading(
         dataset=config["dataset"]["train"]["path"],
         seed=42,
-        ratio=config["model"]["tfidf"]["split"]["train_size"],
+        ratio=config["dataset"]["split"]["train_size"],
     )
     train_dataset, dev_dataset, test_dataset = loader.split()
 
     return train_dataset, dev_dataset, test_dataset
+
+
+def build_vocab(texts, min_freq: int = 2, max_size: int = 30000) -> dict:
+    """
+    Build a vocabulary mapping from tokens to integer indices.
+    The vocabulary will include only tokens that appear at least `min_freq` times,
+    and will be limited to `max_size` tokens (including PAD and UNK).
+    """
+    counter = Counter()
+    for t in texts:
+        counter.update(tokenize(t))
+    # Reserve 0 for PAD and 1 for UNK.
+    vocab = {PAD: PAD_IDX, UNK: UNK_IDX}
+    for word, freq in counter.most_common():
+        if freq < min_freq:
+            break
+        if len(vocab) >= max_size:
+            break
+        vocab[word] = len(vocab)
+    return vocab
+
+
+def collate(batch: list) -> Batch:
+    """Collate function to convert a list of samples into a batch."""
+    # batch: list of (ids_list, label)
+    lengths = torch.tensor([len(x) for x, _ in batch], dtype=torch.long)
+    max_len = int(lengths.max().item()) if len(batch) > 0 else 0
+    x = torch.full((len(batch), max_len), PAD_IDX, dtype=torch.long)
+    y = torch.tensor([y for _, y in batch], dtype=torch.long)
+    for i, (ids, _) in enumerate(batch):
+        x[i, : len(ids)] = torch.tensor(ids, dtype=torch.long)
+    return Batch(x=x, lengths=lengths, y=y)
+
+
+def train_neural(
+    model: torch.nn.Module,
+    train_dataset,
+    dev_dataset,
+    vocab_dict: dict[str, int],
+    args,
+    device: torch.device,
+) -> torch.nn.Module:
+    """Training loop with early stopping for neural models."""
+    train_loader = DataLoader(
+        NeuralDataset(train_dataset, vocab_dict),
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=collate,
+    )
+    dev_loader = DataLoader(
+        NeuralDataset(dev_dataset, vocab_dict),
+        batch_size=args.batch_size,
+        collate_fn=collate,
+    )
+
+    model = model.to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    loss_fn = torch.nn.CrossEntropyLoss()
+
+    best_val_loss = float("inf")
+    patience_counter = 0
+    best_state = copy.deepcopy(model.state_dict())
+
+    for epoch in range(1, args.epochs + 1):
+        model.train()
+        train_loss = 0.0
+        for batch in tqdm(train_loader, desc=f"Epoch {epoch}"):
+            X_batch, y_batch = batch.x.to(device), batch.y.to(device)
+            optimizer.zero_grad()
+            loss = loss_fn(model(X_batch), y_batch)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+
+        model.eval()
+        val_loss = 0.0
+        correct = 0
+        with torch.no_grad():
+            for batch in tqdm(dev_loader, desc=f"Epoch {epoch} - Validation"):
+                X_batch, y_batch = batch.x.to(device), batch.y.to(device)
+                logits = model(X_batch)
+                val_loss += loss_fn(logits, y_batch).item()
+                correct += (logits.argmax(dim=1) == y_batch).sum().item()
+
+        avg_train = train_loss / len(train_loader)
+        avg_val = val_loss / len(dev_loader)
+        val_acc = correct / len(dev_dataset)
+
+        print(
+            f"Epoch {epoch:>3}/{args.epochs} "
+            f"| Train Loss: {avg_train:.4f} "
+            f"| Val Loss: {avg_val:.4f} "
+            f"| Val Acc: {val_acc:.4f}"
+        )
+
+        if avg_val < best_val_loss:
+            best_val_loss = avg_val
+            best_state = copy.deepcopy(model.state_dict())
+            torch.save(best_state, f"model_states/{args.architecture}_best.pt")
+            patience_counter = 0
+        else:
+            patience_counter += 1
+            if patience_counter >= args.patience:
+                print(f"Early stopping triggered at epoch {epoch}.")
+                break
+
+    model.load_state_dict(best_state)
+    return model
 
 
 def evaluate_model(model, X_test, y_test, dataset_name: str = "Test"):
@@ -139,7 +286,9 @@ def evaluate_model(model, X_test, y_test, dataset_name: str = "Test"):
     disp = ConfusionMatrixDisplay(confusion_matrix=conf_matrix)
 
     disp.plot(xticks_rotation="vertical")
-    plt.title("Confusion Matrix: TF-IDF + Logistic Regression")
+    plt.title(
+        f"Confusion Matrix: {model.__class__.__name__} on {dataset_name}"
+    )
     plt.show()
 
 
@@ -208,14 +357,27 @@ if __name__ == "__main__":
         error_analysis(test_df, y_test, X_test, model)
 
         print("Evaluating Dev:")
-        dev_results = evaluate_model(model, X_dev, y_dev, "Dev")
+        evaluate_model(model, X_dev, y_dev, "Dev")
 
-        print("Evaluating Test:")
-        test_results = evaluate_model(model, X_test, y_test, "Test")
+        # print("Evaluating Test:")
+        # evaluate_model(model, X_test, y_test, "Test")
     elif args.model == "neural":
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Using device: {device}")
+
+        texts = train_df["description"]
+        vocab_dict = build_vocab(texts)
+        vocab_size = len(vocab_dict)
+
         if args.architecture == "lstm":
             print("Training LSTM model...")
             model = cnn.LSTMTextClassifier(vocab_size)
+            model = train_neural(
+                model, train_dataset, dev_dataset, vocab_dict, args, device
+            )
         elif args.architecture == "cnn":
             print("Training CNN model...")
             model = cnn.CNNTextClassifier(vocab_size)
+            model = train_neural(
+                model, train_dataset, dev_dataset, vocab_dict, args, device
+            )

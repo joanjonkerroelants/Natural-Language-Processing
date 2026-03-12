@@ -1,26 +1,20 @@
 verbosity:
   level:
-    high: 
-    medium: 
-    low:
+    - high
+    - medium
+    - low
 
 model:
   tfidf:
     architectures:
       - logistic
       - svm
-    split:
-      train_size: 0.9
-      val_size: 0.1
 
   neural:
     architectures:
       - lstm
       - cnn
-    split:
-      train_size: 0.9
-      val_size: 0.1
-
+  
   transformer:
     architectures:
       - brian
@@ -30,6 +24,9 @@ dataset:
     path: ./dataset/train.jsonl
   test:
     path: ./dataset/test.jsonl
+  split:
+    train_size: 0.9
+    val_size: 0.1
 
 training:
   lr: 0.001

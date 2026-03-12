@@ -1,12 +1,14 @@
-from pathlib import Path
+import re
 from collections import Counter
-from models.load import loading, DatasetNews
-import numpy as np 
+from pathlib import Path
 from pprint import pprint
-import re 
+
 import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+import numpy as np
+
+from models.load import DatasetNews, loading
+
+matplotlib.use("Agg")
 
 DATA_PATH = Path("./dataset/train.jsonl")
 OUTPUT_PLOT = Path("./output_images/sentence_length_boxplot.png")
@@ -20,6 +22,7 @@ CLASSES = {
     "Business": 3,
     "Sci/Tech": 4,
 }
+
 
 def sentences_from_newsdataset(df) -> list[str]:
     dataset = DatasetNews(df, text_mode="full")
@@ -56,12 +59,12 @@ def length_of_sentences(sentences: list, class_label=None):
             maximum_length = length
         if minimum_length == -1 or length < minimum_length:
             minimum_length = length
-    
+
     array = np.array(lengths, dtype=float)
     mean_length = np.mean(array)
     median_length = np.median(array)
     interval_length = (np.percentile(array, 5), np.percentile(array, 95))
-    
+
     return {
         "class_label": class_label,
         "max_length": maximum_length,
@@ -72,6 +75,7 @@ def length_of_sentences(sentences: list, class_label=None):
         "interval_length": interval_length,
     }, array
 
+
 def vocab_from_sentences(sentences: list) -> tuple[set, int]:
     """Calculate the vocabulary from a list of sentences."""
     vocab = set()
@@ -79,7 +83,8 @@ def vocab_from_sentences(sentences: list) -> tuple[set, int]:
         sentence = re.sub(r"[^a-z0-9\s]", " ", sentence)
         words = sentence.split()
         vocab.update(words)
-    return vocab, len(vocab) 
+    return vocab, len(vocab)
+
 
 def most_common_words(sentences: list, n=15):
     """Calculate the most common words in a list of sentences."""
@@ -91,17 +96,20 @@ def most_common_words(sentences: list, n=15):
     most_common = counter.most_common(n)
     return most_common
 
+
 if __name__ == "__main__":
     pprint("running pre-analysis...")
     loader = loading(dataset=str(DATA_PATH))
     df = loader._load(DATA_PATH)
     common_words = Counter()
     class_commons = {}
-    sentence_stats = {} 
-    data_length = [] # length of sentences used for the boxplot
+    sentence_stats = {}
+    data_length = []  # length of sentences used for the boxplot
     for class_name, id in CLASSES.items():
         class_sentences = sentences_from_newsdataset(df[df["label"] == id])
-        stats, array = length_of_sentences(class_sentences, class_label=class_name)
+        stats, array = length_of_sentences(
+            class_sentences, class_label=class_name
+        )
         sentence_stats[class_name] = stats
         data_length.append(array)
 
@@ -123,12 +131,16 @@ if __name__ == "__main__":
         pprint(f" Most common words: {class_common[:10]}...")
 
     pprint(f"-------------- Overall --------------")
-    pprint(f"Most common words across all classes: {common_words.most_common(15)}")
-    pprint(f"total CLI: ({(np.percentile(data_length, 5))}, {(np.percentile(data_length, 95))})")
-    #plt.figure(figsize=(10, 6))
-    #plt.boxplot(data, labels=CLASSES.keys())
-    #plt.title("Sentence Length Distribution by Class")
-    #plt.xlabel("Class")
-    #plt.ylabel("Sentence Length (number of words)")
-    #plt.savefig(OUTPUT_PLOT)
+    pprint(
+        f"Most common words across all classes: {common_words.most_common(15)}"
+    )
+    pprint(
+        f"total CLI: ({(np.percentile(data_length, 5))}, {(np.percentile(data_length, 95))})"
+    )
+    # plt.figure(figsize=(10, 6))
+    # plt.boxplot(data, labels=CLASSES.keys())
+    # plt.title("Sentence Length Distribution by Class")
+    # plt.xlabel("Class")
+    # plt.ylabel("Sentence Length (number of words)")
+    # plt.savefig(OUTPUT_PLOT)
     pprint(f"-------------- End --------------")
