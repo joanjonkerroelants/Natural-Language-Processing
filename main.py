@@ -215,6 +215,13 @@ if __name__ == "__main__":
     elif args.model == "neural":
         if args.architecture == "lstm":
             print("Training LSTM model...")
+<<<<<<< HEAD
         elif args.architecture == "cnn":
             print("Training CNN model...")
             model = cnn.CNNTextClassifier(vocab_size)
+=======
+            model = cnn.LSTMTextClassifier(vocab_size)
+        elif args.architecture == "cnn":
+            print("Training CNN model...")
+            model = cnn.CNNTextClassifier(vocab_size)
+>>>>>>> 085917ec83aae2830a7e781696920b8222fc8df4
