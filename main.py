@@ -2,6 +2,7 @@ import argparse
 import copy
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -116,6 +117,13 @@ def build_parser(config) -> argparse.ArgumentParser:
             help="Early stopping patience (default: 10)",
         )
 
+        sp.add_argument(
+            "--max-len",
+            type=int,
+            default=config["training"]["max_len"],
+            help="Maximum token sequence length; longer sequences are truncated (default: 128)",
+        )
+
         # model details
         sp.add_argument(
             "--verbose",
@@ -186,12 +194,18 @@ def collate(batch: list) -> Batch:
     """Collate function to convert a list of samples into a batch."""
     # batch: list of (ids_list, label)
     lengths = torch.tensor([len(x) for x, _ in batch], dtype=torch.long)
-    max_len = int(lengths.max().item()) if len(batch) > 0 else 0
+    max_len = (
+        min(int(lengths.max().item()), args.max_len)
+        if args.max_len
+        else int(lengths.max().item())
+    )
     x = torch.full((len(batch), max_len), PAD_IDX, dtype=torch.long)
     y = torch.tensor([y for _, y in batch], dtype=torch.long)
     for i, (ids, _) in enumerate(batch):
-        x[i, : len(ids)] = torch.tensor(ids, dtype=torch.long)
-    return Batch(x=x, lengths=lengths, y=y)
+        x[i, : len(ids[:max_len])] = torch.tensor(
+            ids[:max_len], dtype=torch.long
+        )
+    return Batch(x=x, lengths=lengths.clamp(max=max_len), y=y)
 
 
 def train_neural(
@@ -223,6 +237,9 @@ def train_neural(
     patience_counter = 0
     best_state = copy.deepcopy(model.state_dict())
 
+    train_losses: list[float] = []
+    dev_accs: list[float] = []
+
     for epoch in range(1, args.epochs + 1):
         model.train()
         train_loss = 0.0
@@ -248,6 +265,9 @@ def train_neural(
         avg_val = val_loss / len(dev_loader)
         val_acc = correct / len(dev_dataset)
 
+        train_losses.append(avg_train)
+        dev_accs.append(val_acc)
+
         print(
             f"Epoch {epoch:>3}/{args.epochs} "
             f"| Train Loss: {avg_train:.4f} "
@@ -267,7 +287,37 @@ def train_neural(
                 break
 
     model.load_state_dict(best_state)
+    _save_learning_curves(train_losses, dev_accs, args.architecture)
     return model
+
+
+def _save_learning_curves(
+    train_losses: list[float], dev_accs: list[float], architecture: str
+) -> None:
+    epochs = range(1, len(train_losses) + 1)
+    fig, ax1 = plt.subplots(figsize=(8, 4))
+
+    ax1.plot(epochs, train_losses, label="Train Loss", color="tab:blue")
+    ax1.set_xlabel("Epoch")
+    ax1.set_ylabel("Loss")
+    ax1.tick_params(axis="y")
+
+    ax2 = ax1.twinx()
+    ax2.plot(epochs, dev_accs, label="Dev Accuracy", color="tab:orange")
+    ax2.set_ylabel("Accuracy")
+    ax2.tick_params(axis="y")
+
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="center right")
+
+    fig.suptitle(f"{architecture.upper()} Learning Curves")
+    fig.tight_layout()
+
+    out_path = Path("output_images") / f"{architecture}_learning_curves.png"
+    fig.savefig(out_path)
+    plt.close(fig)
+    print(f"Learning curves saved to {out_path}")
 
 
 def evaluate_model(model, X_test, y_test, dataset_name: str = "Test"):

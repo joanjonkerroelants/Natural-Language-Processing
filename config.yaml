@@ -34,3 +34,4 @@ training:
   epochs: 80
   patience: 10
   classes: 4
+  max_len: 128
