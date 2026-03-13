@@ -10,11 +10,11 @@ Using *uv*:
 
 1. CNN:
 
-    ```uv run main.py neural cnn --max-len 146 --dropout {0 or 0.3}```
+    ```uv run main.py neural cnn --max-len 139 --dropout {0 or 0.3}```
 
 2. LSTM:
 
-    ```uv run main.py neural lstm --max-len 146 --dropout {0 or 0.3}```
+    ```uv run main.py neural lstm --max-len 139 --dropout {0 or 0.3}```
 
 Using *pip*:
 
@@ -22,8 +22,8 @@ Using *pip*:
 
 1. CNN:
 
-    ```python main.py neural cnn --max-len 146 --dropout {0 or 0.3}```
+    ```python main.py neural cnn --max-len 139 --dropout {0 or 0.3}```
 
 2. LSTM:
 
-    ```python main.py neural lstm --max-len 146 --dropout {0 or 0.3}```
+    ```python main.py neural lstm --max-len 139 --dropout {0 or 0.3}```
