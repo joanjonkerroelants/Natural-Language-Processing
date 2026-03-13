@@ -284,6 +284,10 @@ def train_neural(
             patience_counter += 1
             if patience_counter >= args.patience:
                 print(f"Early stopping triggered at epoch {epoch}.")
+                print(f"Best validation loss: {best_val_loss:.4f}")
+                print(
+                    f"Best accuracy: {dev_accs[train_losses.index(best_val_loss)]:.4f}"
+                )
                 break
 
     model.load_state_dict(best_state)
