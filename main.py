@@ -360,6 +360,54 @@ def evaluate_model(model, X_test, y_test, dataset_name: str = "Test"):
     plt.show()
 
 
+def evaluate_neural_model(
+    model: torch.nn.Module,
+    dataset,
+    vocab: dict[str, int],
+    device: torch.device,
+    dataset_name: str = "Test",
+):
+    """Evaluate a neural model on a labelled dataset split."""
+    loader = DataLoader(
+        NeuralDataset(dataset, vocab),
+        batch_size=64,
+        shuffle=False,
+        collate_fn=collate,
+    )
+
+    model.eval()
+    y_true: list[int] = []
+    y_pred: list[int] = []
+
+    with torch.no_grad():
+        for batch in loader:
+            logits = model(batch.x.to(device))
+            preds = logits.argmax(dim=1).cpu().tolist()
+            labels = batch.y.cpu().tolist()
+            y_pred.extend(preds)
+            y_true.extend(labels)
+
+    accuracy = accuracy_score(y_true, y_pred)
+    macro_f1 = f1_score(y_true, y_pred, average="macro")
+    conf_matrix = confusion_matrix(y_true, y_pred)
+
+    print(f"{dataset_name} Results:")
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Macro-F1: {macro_f1:.4f}")
+
+    disp = ConfusionMatrixDisplay(
+        confusion_matrix=conf_matrix,
+        display_labels=[LABELS[i + 1] for i in range(len(LABELS))],
+    )
+    disp.plot(xticks_rotation="vertical")
+    plt.title(
+        f"Confusion Matrix: {model.__class__.__name__} on {dataset_name}"
+    )
+    plt.show()
+
+    return {"accuracy": accuracy, "macro_f1": macro_f1}
+
+
 def error_analysis(test_df, y_test, X_test, model):
     """Perform error analysis by displaying misclassified examples.
 
@@ -419,7 +467,7 @@ def error_analysis_neural(
         tokens = tokenize(row["description"])
         ids = numericalize(tokens, vocab)[:max_len]
         x = torch.tensor(ids, dtype=torch.long).unsqueeze(0).to(device)
-        y = int(row["label"])
+        y = int(row["label"]) - 1
         with torch.no_grad():
             logits = model(x)
             pred = int(logits.argmax(dim=1).item())
@@ -433,7 +481,7 @@ def error_analysis_neural(
     for y, pred, snippet in errs:
         print(f"Text: {snippet}")
         print(
-            f"True Label: {LABELS.get(y)} , Predicted Label: {LABELS.get(pred)}"
+            f"True Label: {LABELS.get(y + 1)} , Predicted Label: {LABELS.get(pred + 1)}"
         )
         print("\n" + "-" * 50 + "\n")
 
@@ -497,6 +545,14 @@ if __name__ == "__main__":
             )
         else:
             raise ValueError(f"Unknown architecture: {args.architecture}")
+
+        print("Evaluating Dev:")
+        evaluate_neural_model(model, dev_dataset, vocab_dict, device, "Dev")
+
+        print("Evaluating Test:")
+        evaluate_neural_model(
+            model, test_dataset, vocab_dict, device, "Test"
+        )
 
         print("Performing error analysis on Test set:")
         error_analysis_neural(

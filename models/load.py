@@ -46,7 +46,7 @@ class loading:
         return (
             DatasetNews(train_df),
             DatasetNews(dev_df),
-            DatasetNews(test_df, has_label=False),
+            DatasetNews(test_df),
         )
 
 
