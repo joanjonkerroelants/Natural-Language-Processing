@@ -65,9 +65,7 @@ def load_config(config_path) -> dict:
 
 def build_parser(config) -> argparse.ArgumentParser:
     "builds the parser based on config"
-    parser = argparse.ArgumentParser(
-        description="Pipeline for multiple models"
-    )
+    parser = argparse.ArgumentParser(description="Pipeline for multiple models")
 
     subparsers = parser.add_subparsers(dest="model", required=True)
 
@@ -202,9 +200,7 @@ def collate(batch: list) -> Batch:
     x = torch.full((len(batch), max_len), PAD_IDX, dtype=torch.long)
     y = torch.tensor([y for _, y in batch], dtype=torch.long)
     for i, (ids, _) in enumerate(batch):
-        x[i, : len(ids[:max_len])] = torch.tensor(
-            ids[:max_len], dtype=torch.long
-        )
+        x[i, : len(ids[:max_len])] = torch.tensor(ids[:max_len], dtype=torch.long)
     return Batch(x=x, lengths=lengths.clamp(max=max_len), y=y)
 
 
@@ -336,9 +332,7 @@ def evaluate_model(model, X_test, y_test, dataset_name: str = "Test"):
     disp = ConfusionMatrixDisplay(confusion_matrix=conf_matrix)
 
     disp.plot(xticks_rotation="vertical")
-    plt.title(
-        f"Confusion Matrix: {model.__class__.__name__} on {dataset_name}"
-    )
+    plt.title(f"Confusion Matrix: {model.__class__.__name__} on {dataset_name}")
     plt.show()
 
 
@@ -349,14 +343,10 @@ def error_analysis(test_df, y_test, X_test, model):
     compares true vs predicted labels.
     """
 
-    true_labels_text = [
-        LABELS.get(int(i) + 1, str(int(i) + 1)) for i in y_test
-    ]
+    true_labels_text = [LABELS.get(int(i) + 1, str(int(i) + 1)) for i in y_test]
 
     pred_numeric = model.predict(X_test)
-    pred_labels_text = [
-        LABELS.get(int(i) + 1, str(int(i) + 1)) for i in pred_numeric
-    ]
+    pred_labels_text = [LABELS.get(int(i) + 1, str(int(i) + 1)) for i in pred_numeric]
 
     df_predictions = pd.DataFrame(
         {
@@ -374,6 +364,50 @@ def error_analysis(test_df, y_test, X_test, model):
         print(f"Text: {e.text}")
         print(f"True Label: {e.true_label}, Predicted Label: {e.pred_label}")
         print("\n" + "-" * 50 + "\n")
+
+
+def numericalize(tokens: list, vocab: dict) -> list:
+    """
+    Convert a list of tokens into a list of integer indices using the provided vocabulary.
+    Tokens not found in the vocabulary will be mapped to the index of UNK.
+    """
+    return [vocab.get(tok, vocab[UNK]) for tok in tokens]
+
+
+def error_analysis_neural(
+    model: torch.nn.Module,
+    dataset,
+    vocab: dict[str, int],
+    max_len: int,
+    device: torch.device,
+    max_items: int = 20,
+):
+    """Perform error analysis for neural models."""
+    model.eval()
+    errs: list[tuple[int, int, str]] = []
+
+    for _, row in dataset.df.iterrows():
+        text = row["description"]
+        tokens = tokenize(row["description"])
+        ids = numericalize(tokens, vocab)[:max_len]
+        x = torch.tensor(ids, dtype=torch.long).unsqueeze(0).to(device)
+        y = int(row["label"])
+        with torch.no_grad():
+            logits = model(x)
+            pred = int(logits.argmax(dim=1).item())
+        if pred != y:
+            snippet = text.replace("\n", " ")
+            snippet = snippet[:250] + ("..." if len(snippet) > 250 else "")
+            errs.append((y, pred, snippet))
+        if len(errs) >= max_items:
+            break
+
+    for y, pred, snippet in errs:
+        print(f"Text: {snippet}")
+        print(f"True Label: {LABELS.get(y)} , Predicted Label: {LABELS.get(pred)}")
+        print("\n" + "-" * 50 + "\n")
+
+    return errs
 
 
 if __name__ == "__main__":
@@ -431,3 +465,6 @@ if __name__ == "__main__":
             model = train_neural(
                 model, train_dataset, dev_dataset, vocab_dict, args, device
             )
+
+        print("Performing error analysis on Test set:")
+        error_analysis_neural(model, test_dataset, vocab_dict, args.max_len, device)
