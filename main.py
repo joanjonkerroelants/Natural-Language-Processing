@@ -65,7 +65,9 @@ def load_config(config_path) -> dict:
 
 def build_parser(config) -> argparse.ArgumentParser:
     "builds the parser based on config"
-    parser = argparse.ArgumentParser(description="Pipeline for multiple models")
+    parser = argparse.ArgumentParser(
+        description="Pipeline for multiple models"
+    )
 
     subparsers = parser.add_subparsers(dest="model", required=True)
 
@@ -120,6 +122,13 @@ def build_parser(config) -> argparse.ArgumentParser:
             type=int,
             default=config["training"]["max_len"],
             help="Maximum token sequence length; longer sequences are truncated (default: 128)",
+        )
+
+        sp.add_argument(
+            "--dropout",
+            type=float,
+            default=config["training"]["dropout"],
+            help="Dropout probability (default: 0.3)",
         )
 
         # model details
@@ -200,7 +209,9 @@ def collate(batch: list) -> Batch:
     x = torch.full((len(batch), max_len), PAD_IDX, dtype=torch.long)
     y = torch.tensor([y for _, y in batch], dtype=torch.long)
     for i, (ids, _) in enumerate(batch):
-        x[i, : len(ids[:max_len])] = torch.tensor(ids[:max_len], dtype=torch.long)
+        x[i, : len(ids[:max_len])] = torch.tensor(
+            ids[:max_len], dtype=torch.long
+        )
     return Batch(x=x, lengths=lengths.clamp(max=max_len), y=y)
 
 
@@ -234,7 +245,12 @@ def train_neural(
     best_state = copy.deepcopy(model.state_dict())
 
     train_losses: list[float] = []
+    val_losses: list[float] = []
     dev_accs: list[float] = []
+    best_epoch = 0
+
+    saved_models_dir = Path("model_states")
+    saved_models_dir.mkdir(parents=True, exist_ok=True)
 
     for epoch in range(1, args.epochs + 1):
         model.train()
@@ -262,6 +278,7 @@ def train_neural(
         val_acc = correct / len(dev_dataset)
 
         train_losses.append(avg_train)
+        val_losses.append(avg_val)
         dev_accs.append(val_acc)
 
         print(
@@ -274,16 +291,17 @@ def train_neural(
         if avg_val < best_val_loss:
             best_val_loss = avg_val
             best_state = copy.deepcopy(model.state_dict())
-            torch.save(best_state, f"model_states/{args.architecture}_best.pt")
+            torch.save(
+                best_state, saved_models_dir / f"{args.architecture}_best.pt"
+            )
+            best_epoch = epoch - 1
             patience_counter = 0
         else:
             patience_counter += 1
             if patience_counter >= args.patience:
                 print(f"Early stopping triggered at epoch {epoch}.")
                 print(f"Best validation loss: {best_val_loss:.4f}")
-                print(
-                    f"Best accuracy: {dev_accs[train_losses.index(best_val_loss)]:.4f}"
-                )
+                print(f"Best accuracy: {dev_accs[best_epoch]:.4f}")
                 break
 
     model.load_state_dict(best_state)
@@ -336,7 +354,9 @@ def evaluate_model(model, X_test, y_test, dataset_name: str = "Test"):
     disp = ConfusionMatrixDisplay(confusion_matrix=conf_matrix)
 
     disp.plot(xticks_rotation="vertical")
-    plt.title(f"Confusion Matrix: {model.__class__.__name__} on {dataset_name}")
+    plt.title(
+        f"Confusion Matrix: {model.__class__.__name__} on {dataset_name}"
+    )
     plt.show()
 
 
@@ -347,10 +367,14 @@ def error_analysis(test_df, y_test, X_test, model):
     compares true vs predicted labels.
     """
 
-    true_labels_text = [LABELS.get(int(i) + 1, str(int(i) + 1)) for i in y_test]
+    true_labels_text = [
+        LABELS.get(int(i) + 1, str(int(i) + 1)) for i in y_test
+    ]
 
     pred_numeric = model.predict(X_test)
-    pred_labels_text = [LABELS.get(int(i) + 1, str(int(i) + 1)) for i in pred_numeric]
+    pred_labels_text = [
+        LABELS.get(int(i) + 1, str(int(i) + 1)) for i in pred_numeric
+    ]
 
     df_predictions = pd.DataFrame(
         {
@@ -408,7 +432,9 @@ def error_analysis_neural(
 
     for y, pred, snippet in errs:
         print(f"Text: {snippet}")
-        print(f"True Label: {LABELS.get(y)} , Predicted Label: {LABELS.get(pred)}")
+        print(
+            f"True Label: {LABELS.get(y)} , Predicted Label: {LABELS.get(pred)}"
+        )
         print("\n" + "-" * 50 + "\n")
 
     return errs
@@ -459,16 +485,20 @@ if __name__ == "__main__":
 
         if args.architecture == "lstm":
             print("Training LSTM model...")
-            model = cnn.LSTMTextClassifier(vocab_size)
+            model = cnn.LSTMTextClassifier(vocab_size, dropout=args.dropout)
             model = train_neural(
                 model, train_dataset, dev_dataset, vocab_dict, args, device
             )
         elif args.architecture == "cnn":
             print("Training CNN model...")
-            model = cnn.CNNTextClassifier(vocab_size)
+            model = cnn.CNNTextClassifier(vocab_size, dropout=args.dropout)
             model = train_neural(
                 model, train_dataset, dev_dataset, vocab_dict, args, device
             )
+        else:
+            raise ValueError(f"Unknown architecture: {args.architecture}")
 
         print("Performing error analysis on Test set:")
-        error_analysis_neural(model, test_dataset, vocab_dict, args.max_len, device)
+        error_analysis_neural(
+            model, test_dataset, vocab_dict, args.max_len, device
+        )

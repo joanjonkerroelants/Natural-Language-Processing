@@ -35,3 +35,4 @@ training:
   patience: 10
   classes: 4
   max_len: 128
+  dropout: 0.3
