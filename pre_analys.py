@@ -11,7 +11,7 @@ from models.load import DatasetNews, loading
 matplotlib.use("Agg")
 
 DATA_PATH = Path("./dataset/train.jsonl")
-OUTPUT_PLOT = Path("./output_images/sentence_length_boxplot.png")
+OUTPUT_PLOT = Path("./output_images/text_length_boxplot.png")
 
 UNK = "<unk>"
 PAD = "<pad>"
@@ -24,9 +24,9 @@ CLASSES = {
 }
 
 
-def sentences_from_newsdataset(df) -> list[str]:
-    dataset = DatasetNews(df, text_mode="full")
-    sentences = []
+def texts_from_newsdataset(df) -> list[str]:
+    dataset = DatasetNews(df, text_mode="full") 
+    texts = []
     for idx in range(len(dataset)):
         tokens = dataset[idx]["tokens"]
         words = [
@@ -34,12 +34,12 @@ def sentences_from_newsdataset(df) -> list[str]:
             for token in tokens
             if isinstance(token, str) and token not in {"<s>", "</s>"}
         ]
-        sentences.append(" ".join(words))
-    return sentences
+        texts.append(" ".join(words))
+    return texts
 
 
-def length_of_sentences(sentences: list, class_label=None):
-    """Calculate the length of each sentence in a list of sentences."""
+def length_of_texts(texts: list, class_label=None):
+    """Calculate the length of each text in a list of texts."""
     maximum_length = 0
     minimum_length = -1
     mode_length = 0
@@ -47,8 +47,8 @@ def length_of_sentences(sentences: list, class_label=None):
     counter = Counter()
     lengths = []
 
-    for sentence in sentences:
-        length = len(sentence.split())
+    for text in texts:
+        length = len(text.split())
         lengths.append(length)
         counter[length] += 1
 
@@ -76,22 +76,22 @@ def length_of_sentences(sentences: list, class_label=None):
     }, array
 
 
-def vocab_from_sentences(sentences: list) -> tuple[set, int]:
-    """Calculate the vocabulary from a list of sentences."""
+def vocab_from_texts(texts: list) -> tuple[set, int]:
+    """Calculate the vocabulary from a list of texts."""
     vocab = set()
-    for sentence in sentences:
-        sentence = re.sub(r"[^a-z0-9\s]", " ", sentence)
-        words = sentence.split()
+    for text in texts:
+        text = re.sub(r"[^a-z0-9\s]", " ", text)
+        words = text.split()
         vocab.update(words)
     return vocab, len(vocab)
 
 
-def most_common_words(sentences: list, n=15):
-    """Calculate the most common words in a list of sentences."""
+def most_common_words(texts: list, n=15):
+    """Calculate the most common words in a list of texts."""
     counter = Counter()
-    for sentence in sentences:
-        sentence = re.sub(r"[^a-z0-9\s]", " ", sentence)
-        words = sentence.split()
+    for text in texts:
+        text = re.sub(r"[^a-z0-9\s]", " ", text)
+        words = text.split()
         counter.update(words)
     most_common = counter.most_common(n)
     return most_common
@@ -103,25 +103,25 @@ if __name__ == "__main__":
     df = loader._load(DATA_PATH)
     common_words = Counter()
     class_commons = {}
-    sentence_stats = {}
-    data_length = []  # length of sentences used for the boxplot
+    text_stats = {}
+    data_length = []  # length of texts used for the boxplot
     for class_name, id in CLASSES.items():
-        class_sentences = sentences_from_newsdataset(df[df["label"] == id])
-        stats, array = length_of_sentences(
-            class_sentences, class_label=class_name
+        class_texts = texts_from_newsdataset(df[df["label"] == id])
+        stats, array = length_of_texts(
+            class_texts, class_label=class_name
         )
-        sentence_stats[class_name] = stats
+        text_stats[class_name] = stats
         data_length.append(array)
 
-        class_common = most_common_words(class_sentences)
+        class_common = most_common_words(class_texts)
         class_commons[class_name] = class_common
         for word, count in class_common:
             common_words[word] += count
 
         print("\n")
         print(f"--- {class_name} ---")
-        print(f" entries in class in sentences: {len(class_sentences)}")
-        print(f" Sentence length stats:")
+        print(f" entries in class in texts: {len(class_texts)}")
+        print(f" text length stats:")
         print(f" Mean: {stats['mean_length']}")
         print(f" Median: {stats['median_length']}")
         print(f" Mode: {stats['mode_length']}")
@@ -134,13 +134,17 @@ if __name__ == "__main__":
     pprint(
         f"Most common words across all classes: {common_words.most_common(15)}"
     )
-    pprint(
-        f"total CLI: ({(np.percentile(data_length, 5))}, {(np.percentile(data_length, 95))})"
-    )
+    pprint(f"Overall text length stats:")
+    all_lengths = np.concatenate(data_length)
+    print("Mean:", np.mean(all_lengths))
+    print("90th percentile:", np.percentile(all_lengths, 90))
+    print("95th percentile:", np.percentile(all_lengths, 95))
+    print("99th percentile:", np.percentile(all_lengths, 99))
+    print("Max:", np.max(all_lengths))
     # plt.figure(figsize=(10, 6))
     # plt.boxplot(data, labels=CLASSES.keys())
-    # plt.title("Sentence Length Distribution by Class")
+    # plt.title("text Length Distribution by Class")
     # plt.xlabel("Class")
-    # plt.ylabel("Sentence Length (number of words)")
+    # plt.ylabel("text Length (number of words)")
     # plt.savefig(OUTPUT_PLOT)
     pprint(f"-------------- End --------------")
