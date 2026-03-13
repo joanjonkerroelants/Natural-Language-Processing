@@ -25,7 +25,7 @@ CLASSES = {
 
 
 def texts_from_newsdataset(df) -> list[str]:
-    dataset = DatasetNews(df, text_mode="title") 
+    dataset = DatasetNews(df, text_mode="full") 
     texts = []
     for idx in range(len(dataset)):
         tokens = dataset[idx]["tokens"]
@@ -136,14 +136,11 @@ if __name__ == "__main__":
     )
     pprint(f"Overall text length stats:")
     all_lengths = np.concatenate(data_length)
-    pprint(f" Mean: {np.mean(all_lengths)}")
-    pprint(f" Median: {np.median(all_lengths)}")
-    pprint(f" Mode: {Counter(all_lengths).most_common(1)[0][0]}")
-    pprint(f" Min: {np.min(all_lengths)}")
-    pprint(f" Max: {np.max(all_lengths)}")
-    pprint(
-        f"total CLI: ({(np.percentile(all_lengths, 5))}, {(np.percentile(all_lengths, 95))})"
-    )
+    print("Mean:", np.mean(all_lengths))
+    print("90th percentile:", np.percentile(all_lengths, 90))
+    print("95th percentile:", np.percentile(all_lengths, 95))
+    print("99th percentile:", np.percentile(all_lengths, 99))
+    print("Max:", np.max(all_lengths))
     # plt.figure(figsize=(10, 6))
     # plt.boxplot(data, labels=CLASSES.keys())
     # plt.title("text Length Distribution by Class")
